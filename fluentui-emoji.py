@@ -6,6 +6,7 @@ import json
 import shutil
 from tqdm import tqdm
 from pathlib import Path
+import argparse
 
 def download_repo_zip(repo_url, branch='main'):
     zip_url = f"https://github.com/{repo_url}/archive/refs/heads/{branch}.zip"
@@ -104,22 +105,22 @@ def save_json(data, file_path):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
-    repo_url = 'microsoft/fluentui-emoji'
-    folder_name = 'fluentui-emoji-main/assets'
-    extract_to = './cache/fluentui-emoji/assets/'
+    parser = argparse.ArgumentParser(description='Download and process FluentUI Emoji')
+    parser.add_argument('--repo-url', default='microsoft/fluentui-emoji', help='GitHub repository URL')
+    parser.add_argument('--folder-name', default='fluentui-emoji-main/assets', help='Folder name in the repository')
+    parser.add_argument('--extract-to', default='./cache/fluentui-emoji/assets/', help='Extraction directory')
+    parser.add_argument('--skin-tone', default='Default', choices=["Default", "Dark", "Medium-Dark", "Medium-Light", "Light"], help='Skin tone')
+    parser.add_argument('--style', default='3D', choices=['3D', 'Color', 'Flat'], help='Emoji style')
+    parser.add_argument('--download', action='store_true', help='Force download of assets')
+    args = parser.parse_args()
 
-    skin_tone = "Default"
-    valid_skin_tones = ["Default", "Dark", "Medium-Dark", "Medium-Light", "Light"]
-    if skin_tone not in valid_skin_tones:
-        print(f"Invalid skin tone: {skin_tone}. Please choose from: {', '.join(valid_skin_tones)}")
-        exit(1)
-    style = "3D"
-    #style options: #ToDo add svg handling for Color and Flat options
-    #3D, Color, Flat
+    repo_url = args.repo_url
+    folder_name = args.folder_name
+    extract_to = args.extract_to
+    skin_tone = args.skin_tone
+    style = args.style
 
-    downloadQ = input(f"Fetch assets from '{'/'.join([repo_url, folder_name])}'? y/n: ").strip().lower()
-
-    if downloadQ == 'y':
+    if args.download:
         print(f"Downloading repository {repo_url}")
         zip_content = download_repo_zip(repo_url)
         if zip_content:
@@ -128,6 +129,8 @@ if __name__ == '__main__':
             print(f"Folder {folder_name} extracted successfully to {extract_to}")
         else:
             print("Failed to download or extract the repository")
+    else:
+        print("Skipping download, using existing files")
 
     providers = process_metadata_and_images(extract_to, style, skin_tone)
 
