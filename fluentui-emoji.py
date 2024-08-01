@@ -68,24 +68,34 @@ def process_metadata_and_images(extract_to, style, skin_tone):
                             #print(f"Metadata content: {json.dumps(metadata, indent=4)}")
                             print(f"{metadata['cldr']}: metadata loaded")
 
-                        if metadata and " " not in metadata["unicode"]:
-                            print(metadata["unicode"] + metadata["glyph"])
+                        if metadata:
+                            unicode = metadata["unicode"]
+                            if " " not in unicode:
+                                if unicode == "1f603":
+                                    shutil.copy2(png_path, f'./packs/FluentUi-{style}-{skin_tone}-Emoji/pack.png')
 
-                            destination_image = f'./packs/FluentUi-{style}-{skin_tone}-Emoji/assets/minecraft/textures/font/{metadata["unicode"]}.png'
+                                print(unicode + metadata["glyph"])
+                            elif unicode.count(" ") == 1 and "fe0f" in unicode:
+                                print("Special case Variation Selector 16 Found")
+                                unicode = unicode.replace(" fe0f", "", 1)
+                                metadata["glyph"] = chr(int(unicode, 16))
+                                print(unicode + metadata["glyph"])
+                            else:
+                                print(f"Skipping {unicode} because it contains a space")
+                                continue
+
+                            destination_image = f'./packs/FluentUi-{style}-{skin_tone}-Emoji/assets/minecraft/textures/font/{unicode}.png'
                             print(f"Copying {png_path} to {destination_image}")
                             Path(destination_image).parent.mkdir(exist_ok=True, parents=True)
                             shutil.copy2(png_path, destination_image)
 
-                            provider = {
+                            providers.append({
                                 "type": "bitmap",
-                                "file": f"minecraft:font/{metadata['unicode']}.png",
+                                "file": f"minecraft:font/{unicode}.png",
                                 "height": 7,
                                 "ascent": 7,
                                 "chars": [metadata["glyph"]]
-                            }
-                            providers.append(provider)
-                        else:
-                            print(f"Skipping {metadata['unicode']} because it contains a space")
+                            })
     return providers
 
 def save_json(data, file_path):
