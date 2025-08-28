@@ -1,6 +1,7 @@
 {
-  "name": "FluentUI Emoji Pack",
+  "name": "FluentUI 3D Emoji Pack",
   "version": "1.0.0",
+  "description": "FluentUI Emoji Pack configured for 3D style only (PNG files)",
   "source": {
     "type": "github",
     "repository": "microsoft/fluentui-emoji",
@@ -13,8 +14,8 @@
       "{style}",
       "{skin_tone}/{style}"
     ],
-    "image_extensions": ["png", "svg"],
-    "styles": ["3D", "Color", "Flat"],
+    "image_extensions": ["png"],
+    "styles": ["3D"],
     "skin_tones": ["Default", "Dark", "Medium-Dark", "Medium-Light", "Light"]
   },
   "output": {

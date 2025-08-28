@@ -30,6 +30,36 @@ class EmojiPackConfig:
         for field in required_fields:
             if field not in self.config:
                 raise ValueError(f"Missing required configuration field: {field}")
+        
+        # Validate source configuration
+        source = self.config['source']
+        required_source_fields = ['repository', 'folder']
+        for field in required_source_fields:
+            if field not in source:
+                raise ValueError(f"Missing required source field: {field}")
+        
+        # Validate input structure
+        input_struct = self.config['input_structure']
+        required_input_fields = ['metadata_file', 'image_folders', 'image_extensions']
+        for field in required_input_fields:
+            if field not in input_struct:
+                raise ValueError(f"Missing required input_structure field: {field}")
+        
+        # Validate output configuration
+        output = self.config['output']
+        required_output_fields = ['output_directory', 'description_template']
+        for field in required_output_fields:
+            if field not in output:
+                raise ValueError(f"Missing required output field: {field}")
+        
+        # Validate file processing
+        file_proc = self.config['file_processing']
+        required_file_proc_fields = ['filename_from_metadata', 'character_from_metadata']
+        for field in required_file_proc_fields:
+            if field not in file_proc:
+                raise ValueError(f"Missing required file_processing field: {field}")
+        
+        print(f"Configuration validation passed for {self.config.get('name', 'Unknown Pack')}")
     
     def get_source_info(self) -> Dict[str, str]:
         """Get source repository information."""
@@ -63,14 +93,20 @@ class EmojiPackProcessor:
         self.file_processing = config.get_file_processing_config()
         self.font_config = config.get_font_config()
     
-    def download_repo_zip(self, branch: Optional[str] = None) -> Optional[bytes]:
+    def download_repo_zip(self, branch: Optional[str] = None, commit: Optional[str] = None) -> Optional[bytes]:
         """Download repository as ZIP file."""
         if branch is None:
             branch = self.source_info.get('branch', 'main')
         
         repo_url = self.source_info['repository']
-        zip_url = f"https://github.com/{repo_url}/archive/refs/heads/{branch}.zip"
         
+        # Support downloading specific commits
+        if commit:
+            zip_url = f"https://github.com/{repo_url}/archive/{commit}.zip"
+        else:
+            zip_url = f"https://github.com/{repo_url}/archive/refs/heads/{branch}.zip"
+        
+        print(f"Downloading from: {zip_url}")
         response = requests.get(zip_url, stream=True)
         if response.status_code == 200:
             total_size = int(response.headers.get('content-length', 0))
@@ -89,16 +125,44 @@ class EmojiPackProcessor:
             print(f"Failed to download repository zip from: {zip_url}\nResponse code: {response.status_code}")
             return None
     
-    def extract_folder_from_zip(self, zip_content: bytes, extract_to: str = './cache'):
+    def extract_folder_from_zip(self, zip_content: bytes, extract_to: str = './cache', commit: Optional[str] = None):
         """Extract specified folder from ZIP file."""
         repo_name = self.source_info['repository'].split('/')[-1]
-        branch = self.source_info.get('branch', 'main')
-        folder_name = f"{repo_name}-{branch}/{self.source_info['folder']}"
+        
+        if commit:
+            # For commits, GitHub uses the commit hash as folder name
+            folder_prefix = f"{repo_name}-{commit[:7]}"  # GitHub uses first 7 chars for short commit hash
+        else:
+            branch = self.source_info.get('branch', 'main')
+            folder_prefix = f"{repo_name}-{branch}"
+        
+        source_folder = f"{folder_prefix}/{self.source_info['folder']}"
         
         with zipfile.ZipFile(io.BytesIO(zip_content)) as zip_file:
-            members = [m for m in zip_file.namelist() if m.startswith(folder_name)]
+            # Find the actual folder name in the ZIP (GitHub might use full commit hash)
+            all_members = zip_file.namelist()
+            actual_folder = None
+            
+            # Look for the folder pattern
+            for member in all_members:
+                if member.startswith(f"{repo_name}-") and f"/{self.source_info['folder']}/" in member:
+                    parts = member.split('/')
+                    if len(parts) >= 2:
+                        actual_folder = f"{parts[0]}/{self.source_info['folder']}"
+                        break
+            
+            if not actual_folder:
+                # Fallback to the expected folder name
+                actual_folder = source_folder
+            
+            print(f"Extracting from folder: {actual_folder}")
+            members = [m for m in all_members if m.startswith(actual_folder)]
+            
+            if not members:
+                raise ValueError(f"No files found in folder {actual_folder}. Available folders: {set(m.split('/')[0] for m in all_members[:10])}")
+            
             for member in tqdm(members, desc="Extracting"):
-                member_path = os.path.relpath(member, folder_name)
+                member_path = os.path.relpath(member, actual_folder)
                 target_path = os.path.join(extract_to, member_path)
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 if not member.endswith('/'):
@@ -236,24 +300,52 @@ class EmojiPackProcessor:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
     
-    def generate_pack(self, style: str, skin_tone: str, extract_to: str, force_download: bool = False):
+    def generate_pack(self, style: str, skin_tone: str, extract_to: str, force_download: bool = False, commit: Optional[str] = None):
         """Generate emoji pack for specified style and skin tone."""
+        # Validate inputs
+        available_styles = self.input_structure.get('styles', [])
+        available_skin_tones = self.input_structure.get('skin_tones', [])
+        
+        if available_styles and style not in available_styles:
+            print(f"Warning: Style '{style}' not in configured styles: {available_styles}")
+        
+        if available_skin_tones and skin_tone not in available_skin_tones:
+            print(f"Warning: Skin tone '{skin_tone}' not in configured skin tones: {available_skin_tones}")
+        
         # Download if requested
         if force_download:
             print(f"Downloading repository {self.source_info['repository']}")
-            zip_content = self.download_repo_zip()
+            zip_content = self.download_repo_zip(commit=commit)
             if zip_content:
                 print(f"Extracting folder to {extract_to}")
-                self.extract_folder_from_zip(zip_content, extract_to)
-                print(f"Folder extracted successfully to {extract_to}")
+                try:
+                    self.extract_folder_from_zip(zip_content, extract_to, commit=commit)
+                    print(f"Folder extracted successfully to {extract_to}")
+                except Exception as e:
+                    print(f"Failed to extract folder: {e}")
+                    return
             else:
                 print("Failed to download or extract the repository")
                 return
         else:
             print("Skipping download, using existing files")
         
+        # Check if extract directory exists
+        if not os.path.exists(extract_to):
+            print(f"Error: Extract directory {extract_to} does not exist. Use --download to download the repository.")
+            return
+        
         # Process metadata and images
-        providers = self.process_metadata_and_images(extract_to, style, skin_tone)
+        try:
+            providers = self.process_metadata_and_images(extract_to, style, skin_tone)
+            
+            if not providers:
+                print("Warning: No emoji providers were generated. Check your configuration and source data.")
+                return
+                
+        except Exception as e:
+            print(f"Error processing metadata and images: {e}")
+            return
         
         # Generate font JSON
         font_json = {"providers": providers}
@@ -261,7 +353,13 @@ class EmojiPackProcessor:
             f"{self.output_config['output_directory']}/{self.output_config['font_path']}",
             style=style, skin_tone=skin_tone
         )
-        self.save_json(font_json, Path(font_path))
+        
+        try:
+            self.save_json(font_json, Path(font_path))
+            print(f"Generated font configuration: {font_path}")
+        except Exception as e:
+            print(f"Error saving font configuration: {e}")
+            return
         
         # Generate pack.mcmeta
         description = self._substitute_variables(
@@ -271,16 +369,22 @@ class EmojiPackProcessor:
         pack_meta = {
             "pack": {
                 "description": description,
-                "pack_format": self.output_config['pack_format']
+                "pack_format": self.output_config.get('pack_format', 15)
             }
         }
         pack_meta_path = self._substitute_variables(
             f"{self.output_config['output_directory']}/{self.output_config['pack_meta_path']}",
             style=style, skin_tone=skin_tone
         )
-        self.save_json(pack_meta, Path(pack_meta_path))
         
-        print(f"Generated pack for {style}-{skin_tone}")
+        try:
+            self.save_json(pack_meta, Path(pack_meta_path))
+            print(f"Generated pack metadata: {pack_meta_path}")
+        except Exception as e:
+            print(f"Error saving pack metadata: {e}")
+            return
+        
+        print(f"Successfully generated pack for {style}-{skin_tone} with {len(providers)} emojis")
 
 
 def main():
@@ -291,21 +395,27 @@ def main():
     parser.add_argument('--style', help='Emoji style (overrides config styles)')
     parser.add_argument('--skin-tone', help='Skin tone (overrides config skin_tones)')
     parser.add_argument('--download', action='store_true', help='Force download of assets')
+    parser.add_argument('--commit', help='Specific commit hash to download (overrides branch)')
     args = parser.parse_args()
     
-    # Load configuration
-    config = EmojiPackConfig(args.config)
-    processor = EmojiPackProcessor(config)
-    
-    # Determine styles and skin tones to process
-    input_structure = config.get_input_structure()
-    styles = [args.style] if args.style else input_structure.get('styles', ['Default'])
-    skin_tones = [args.skin_tone] if args.skin_tone else input_structure.get('skin_tones', ['Default'])
-    
-    # Generate packs for all combinations
-    for style in styles:
-        for skin_tone in skin_tones:
-            processor.generate_pack(style, skin_tone, args.extract_to, args.download)
+    try:
+        # Load configuration
+        config = EmojiPackConfig(args.config)
+        processor = EmojiPackProcessor(config)
+        
+        # Determine styles and skin tones to process
+        input_structure = config.get_input_structure()
+        styles = [args.style] if args.style else input_structure.get('styles', ['Default'])
+        skin_tones = [args.skin_tone] if args.skin_tone else input_structure.get('skin_tones', ['Default'])
+        
+        # Generate packs for all combinations
+        for style in styles:
+            for skin_tone in skin_tones:
+                processor.generate_pack(style, skin_tone, args.extract_to, args.download, args.commit)
+                
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
 
 
 if __name__ == '__main__':
