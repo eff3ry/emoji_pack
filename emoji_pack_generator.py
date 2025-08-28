@@ -40,10 +40,15 @@ class EmojiPackConfig:
         
         # Validate input structure
         input_struct = self.config['input_structure']
-        required_input_fields = ['metadata_file', 'image_folders', 'image_extensions']
+        required_input_fields = ['image_folders', 'image_extensions']
         for field in required_input_fields:
             if field not in input_struct:
                 raise ValueError(f"Missing required input_structure field: {field}")
+        
+        # Check metadata configuration
+        use_metadata = input_struct.get('use_metadata', True)
+        if use_metadata and 'metadata_file' not in input_struct:
+            raise ValueError("metadata_file is required when use_metadata is true")
         
         # Validate output configuration
         output = self.config['output']
@@ -54,10 +59,16 @@ class EmojiPackConfig:
         
         # Validate file processing
         file_proc = self.config['file_processing']
-        required_file_proc_fields = ['filename_from_metadata', 'character_from_metadata']
-        for field in required_file_proc_fields:
-            if field not in file_proc:
-                raise ValueError(f"Missing required file_processing field: {field}")
+        use_metadata = self.config['input_structure'].get('use_metadata', True)
+        
+        if use_metadata:
+            required_file_proc_fields = ['filename_from_metadata', 'character_from_metadata']
+            for field in required_file_proc_fields:
+                if field not in file_proc:
+                    raise ValueError(f"Missing required file_processing field: {field}")
+        else:
+            if 'filename_from_file' not in file_proc:
+                raise ValueError("filename_from_file is required when use_metadata is false")
         
         print(f"Configuration validation passed for {self.config.get('name', 'Unknown Pack')}")
     
@@ -173,6 +184,50 @@ class EmojiPackProcessor:
         """Substitute variables in template string."""
         return template.format(**kwargs)
     
+    def _unicode_hex_to_char(self, hex_string: str, separator: str = "-") -> str:
+        """Convert Unicode hex string to character."""
+        # Split by separator and convert each part
+        hex_parts = hex_string.split(separator)
+        chars = []
+        for hex_part in hex_parts:
+            try:
+                # Convert hex to integer, then to character
+                code_point = int(hex_part, 16)
+                chars.append(chr(code_point))
+            except (ValueError, OverflowError) as e:
+                print(f"Warning: Could not convert {hex_part} to character: {e}")
+                return hex_string  # Return original if conversion fails
+        
+        return ''.join(chars)
+    
+    def _extract_unicode_from_template(self, filename: str, pattern_template: str) -> Optional[str]:
+        """Extract unicode value from filename using a template pattern.
+        
+        Args:
+            filename: The filename to parse (without extension)
+            pattern_template: Template like "emoji_u{unicode}" where {unicode} marks the unicode part
+            
+        Returns:
+            The extracted unicode hex string, or None if pattern doesn't match
+        """
+        import re
+        
+        # Escape special regex characters in the template, but keep {unicode} as a capture group
+        escaped_template = re.escape(pattern_template)
+        
+        # Replace the escaped {unicode} placeholder with a capture group for hex characters
+        regex_pattern = escaped_template.replace(r'\{unicode\}', r'([0-9a-fA-F_]+)')
+        
+        # Add start and end anchors to ensure full match
+        regex_pattern = f'^{regex_pattern}$'
+        
+        match = re.match(regex_pattern, filename)
+        if match:
+            # Return the captured unicode part
+            return match.group(1)
+        else:
+            return None
+    
     def _find_image_folder(self, subfolder_path: str, style: str, skin_tone: str) -> Optional[str]:
         """Find image folder based on configured patterns."""
         for pattern in self.input_structure['image_folders']:
@@ -211,6 +266,17 @@ class EmojiPackProcessor:
     
     def process_metadata_and_images(self, extract_to: str, style: str, skin_tone: str) -> List[Dict[str, Any]]:
         """Process metadata and images according to configuration."""
+        providers = []
+        use_metadata = self.input_structure.get('use_metadata', True)
+        image_extensions = self.input_structure['image_extensions']
+        
+        if use_metadata:
+            return self._process_with_metadata(extract_to, style, skin_tone)
+        else:
+            return self._process_without_metadata(extract_to, style, skin_tone)
+    
+    def _process_with_metadata(self, extract_to: str, style: str, skin_tone: str) -> List[Dict[str, Any]]:
+        """Process with metadata.json files."""
         providers = []
         metadata_filename = self.input_structure['metadata_file']
         image_extensions = self.input_structure['image_extensions']
@@ -291,6 +357,98 @@ class EmojiPackProcessor:
                     "ascent": self.font_config.get('ascent', 7),
                     "chars": [metadata[character_field]]
                 })
+        
+        return providers
+    
+    def _process_without_metadata(self, extract_to: str, style: str, skin_tone: str) -> List[Dict[str, Any]]:
+        """Process without metadata files, using filename parsing."""
+        providers = []
+        image_extensions = self.input_structure['image_extensions']
+        filename_config = self.file_processing.get('filename_from_file', {})
+        
+        if not filename_config.get('enabled', False):
+            print("Error: filename_from_file is not enabled")
+            return providers
+        
+        pattern = filename_config.get('pattern', 'unicode_hex')
+        separator = filename_config.get('separator', '-')
+        
+        # Find image folder
+        image_folder_path = self._find_image_folder(extract_to, style, skin_tone)
+        if not image_folder_path:
+            # If no specific folder found, use extract_to directly
+            image_folder_path = extract_to
+        
+        print(f"Processing images from: {image_folder_path}")
+        
+        # Process all image files in the folder
+        for filename in os.listdir(image_folder_path):
+            file_path = os.path.join(image_folder_path, filename)
+            
+            # Check if it's an image file
+            if not os.path.isfile(file_path):
+                continue
+            
+            file_ext = filename.lower().split('.')[-1]
+            if file_ext not in [ext.lower() for ext in image_extensions]:
+                continue
+            
+            # Extract unicode from filename
+            basename = '.'.join(filename.split('.')[:-1])  # Remove extension
+            
+            if pattern == 'unicode_hex':
+                # Convert hex filename to unicode and character
+                unicode_val = basename.upper()  # Keep as uppercase hex
+                character = self._unicode_hex_to_char(basename, separator)
+                
+                print(f"Processing: {basename} -> {unicode_val} -> {character}")
+                
+            elif '{unicode}' in pattern:
+                # Handle template-based patterns like "emoji_u{unicode}"
+                unicode_val = self._extract_unicode_from_template(basename, pattern)
+                if unicode_val is None:
+                    continue
+                    
+                unicode_val = unicode_val.upper()  # Keep as uppercase hex
+                character = self._unicode_hex_to_char(unicode_val, separator)
+                
+                print(f"Processing: {basename} -> {unicode_val} -> {character}")
+                
+            else:
+                print(f"Unknown pattern: {pattern}")
+                continue
+                
+            # Handle pack icon
+            if unicode_val.lower() == self.output_config.get('pack_icon_source', '').lower():
+                icon_dest = self._substitute_variables(
+                    f"{self.output_config['output_directory']}/pack.png",
+                    style=style, skin_tone=skin_tone
+                )
+                Path(icon_dest).parent.mkdir(exist_ok=True, parents=True)
+                shutil.copy2(file_path, icon_dest)
+            
+            # Copy image to destination
+            destination_image = self._substitute_variables(
+                f"{self.output_config['output_directory']}/{self.output_config['textures_path']}/{unicode_val}.png",
+                style=style, skin_tone=skin_tone
+            )
+            print(f"Copying {file_path} to {destination_image}")
+            Path(destination_image).parent.mkdir(exist_ok=True, parents=True)
+            shutil.copy2(file_path, destination_image)
+            
+            # Create font provider entry
+            file_template_path = self._substitute_variables(
+                self.font_config['file_template'], 
+                filename=unicode_val
+            )
+            
+            providers.append({
+                "type": self.font_config.get('provider_type', 'bitmap'),
+                "file": file_template_path,
+                "height": self.font_config.get('height', 7),
+                "ascent": self.font_config.get('ascent', 7),
+                "chars": [character]
+            })
         
         return providers
     

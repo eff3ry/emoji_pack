@@ -16,6 +16,7 @@ This document describes the JSON configuration schema for the emoji pack generat
   },
   "input_structure": {
     "metadata_file": "metadata.json",
+    "use_metadata": true,
     "image_folders": [
       "{style}",
       "{skin_tone}/{style}"
@@ -37,6 +38,11 @@ This document describes the JSON configuration schema for the emoji pack generat
   "file_processing": {
     "filename_from_metadata": "unicode",
     "character_from_metadata": "glyph",
+    "filename_from_file": {
+      "enabled": true,
+      "pattern": "unicode_hex",
+      "separator": "-"
+    },
     "unicode_processing": {
       "skip_if_contains_space": true,
       "handle_variation_selector": {
@@ -73,7 +79,8 @@ This document describes the JSON configuration schema for the emoji pack generat
 - `folder`: Folder within the repository to extract
 
 ### Input Structure
-- `metadata_file`: Name of the metadata file in each emoji folder
+- `metadata_file`: Name of the metadata file in each emoji folder (optional if use_metadata is false)
+- `use_metadata`: Whether to use metadata.json files or parse from filenames
 - `image_folders`: Array of folder patterns to search for images (supports {style}, {skin_tone} variables)
 - `image_extensions`: Supported image file extensions
 - `styles`: Available styles for this emoji set
@@ -90,8 +97,15 @@ This document describes the JSON configuration schema for the emoji pack generat
 - `pack_icon_source`: Unicode value to use as pack icon
 
 ### File Processing
-- `filename_from_metadata`: Metadata field to use for filename
-- `character_from_metadata`: Metadata field to use for character mapping
+- `filename_from_metadata`: Metadata field to use for filename (when use_metadata is true)
+- `character_from_metadata`: Metadata field to use for character mapping (when use_metadata is true)
+- `filename_from_file`: Configuration for parsing filenames directly (when use_metadata is false)
+  - `enabled`: Whether to parse filenames
+  - `pattern`: Pattern template for filename parsing:
+    - `"unicode_hex"`: Direct hex-encoded unicode (e.g., "1f600.png" for 😀)
+    - `"emoji_u{unicode}"`: Noto Emoji format with prefix (e.g., "emoji_u1f600.png" for 😀)
+    - `"{unicode}_custom"`: Any custom template using {unicode} placeholder
+  - `separator`: Character that separates unicode sequences (e.g., "-" for multi-part emojis)
 - `unicode_processing`: Rules for processing unicode values
 
 ### Font Configuration

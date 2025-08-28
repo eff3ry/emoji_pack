@@ -3,16 +3,16 @@
   "version": "1.0.0",
   "source": {
     "type": "github",
-    "repository": "twitter/twemoji",
+    "repository": "jdecked/twemoji",
     "branch": "master",
-    "folder": "assets"
+    "folder": "assets/"
   },
   "input_structure": {
-    "metadata_file": "metadata.json",
+    "use_metadata": false,
     "image_folders": [
-      "svg"
+      "72x72"
     ],
-    "image_extensions": ["svg"],
+    "image_extensions": ["png"],
     "styles": ["Default"],
     "skin_tones": ["Default"]
   },
@@ -27,8 +27,11 @@
     "pack_icon_source": "1f603"
   },
   "file_processing": {
-    "filename_from_metadata": "unicode",
-    "character_from_metadata": "char",
+    "filename_from_file": {
+      "enabled": true,
+      "pattern": "unicode_hex",
+      "separator": "-"
+    },
     "unicode_processing": {
       "skip_if_contains_space": false,
       "handle_variation_selector": {

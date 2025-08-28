@@ -1,0 +1,48 @@
+{
+  "name": "Noto Emoji",
+  "version": "1.0.0",
+  "source": {
+    "type": "github",
+    "repository": "googlefonts/noto-emoji",
+    "branch": "main",
+    "folder": "png"
+  },
+  "input_structure": {
+    "use_metadata": false,
+    "image_folders": [
+      "128"
+    ],
+    "image_extensions": ["png"],
+    "styles": ["Default"],
+    "skin_tones": ["Default"]
+  },
+  "output": {
+    "type": "minecraft_resource_pack",
+    "pack_format": 15,
+    "description_template": "Noto Emoji Resource Pack",
+    "output_directory": "./packs/Noto-Emoji-Pack",
+    "textures_path": "assets/minecraft/textures/font",
+    "font_path": "assets/minecraft/font/default.json",
+    "pack_meta_path": "pack.mcmeta",
+    "pack_icon_source": "1f603"
+  },
+  "file_processing": {
+    "filename_from_file": {
+      "enabled": true,
+      "pattern": "emoji_u{unicode}",
+      "separator": "-"
+    },
+    "unicode_processing": {
+      "skip_if_contains_space": false,
+      "handle_variation_selector": {
+        "enabled": false
+      }
+    }
+  },
+  "font_config": {
+    "provider_type": "bitmap",
+    "height": 8,
+    "ascent": 8,
+    "file_template": "minecraft:font/{filename}.png"
+  }
+}
