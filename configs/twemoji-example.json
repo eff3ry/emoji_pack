@@ -1,0 +1,45 @@
+{
+  "name": "Twemoji Pack",
+  "version": "1.0.0",
+  "source": {
+    "type": "github",
+    "repository": "twitter/twemoji",
+    "branch": "master",
+    "folder": "assets"
+  },
+  "input_structure": {
+    "metadata_file": "metadata.json",
+    "image_folders": [
+      "svg"
+    ],
+    "image_extensions": ["svg"],
+    "styles": ["Default"],
+    "skin_tones": ["Default"]
+  },
+  "output": {
+    "type": "minecraft_resource_pack",
+    "pack_format": 15,
+    "description_template": "Twemoji Resource Pack",
+    "output_directory": "./packs/Twemoji-Pack",
+    "textures_path": "assets/minecraft/textures/font",
+    "font_path": "assets/minecraft/font/default.json",
+    "pack_meta_path": "pack.mcmeta",
+    "pack_icon_source": "1f603"
+  },
+  "file_processing": {
+    "filename_from_metadata": "unicode",
+    "character_from_metadata": "char",
+    "unicode_processing": {
+      "skip_if_contains_space": false,
+      "handle_variation_selector": {
+        "enabled": false
+      }
+    }
+  },
+  "font_config": {
+    "provider_type": "bitmap",
+    "height": 8,
+    "ascent": 8,
+    "file_template": "minecraft:font/{filename}.png"
+  }
+}

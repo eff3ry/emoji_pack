@@ -1,0 +1,49 @@
+{
+  "name": "FluentUI 3D Emoji Pack",
+  "version": "1.0.0",
+  "description": "FluentUI Emoji Pack configured for 3D style only (PNG files)",
+  "source": {
+    "type": "github",
+    "repository": "microsoft/fluentui-emoji",
+    "branch": "main",
+    "folder": "assets"
+  },
+  "input_structure": {
+    "metadata_file": "metadata.json",
+    "image_folders": [
+      "{style}",
+      "{skin_tone}/{style}"
+    ],
+    "image_extensions": ["png"],
+    "styles": ["3D"],
+    "skin_tones": ["Default", "Dark", "Medium-Dark", "Medium-Light", "Light"]
+  },
+  "output": {
+    "type": "minecraft_resource_pack",
+    "pack_format": 15,
+    "description_template": "FluentUi {style}-{skin_tone} Emoji Resource Pack",
+    "output_directory": "./packs/FluentUi-{style}-{skin_tone}-Emoji",
+    "textures_path": "assets/minecraft/textures/font",
+    "font_path": "assets/minecraft/font/default.json",
+    "pack_meta_path": "pack.mcmeta",
+    "pack_icon_source": "1f603"
+  },
+  "file_processing": {
+    "filename_from_metadata": "unicode",
+    "character_from_metadata": "glyph",
+    "unicode_processing": {
+      "skip_if_contains_space": true,
+      "handle_variation_selector": {
+        "enabled": true,
+        "pattern": " fe0f",
+        "action": "remove_and_convert"
+      }
+    }
+  },
+  "font_config": {
+    "provider_type": "bitmap",
+    "height": 7,
+    "ascent": 7,
+    "file_template": "minecraft:font/{filename}.png"
+  }
+}

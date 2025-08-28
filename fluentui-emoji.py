@@ -1,34 +1,38 @@
 import os
-import requests
-import zipfile
-import io
-import json
-import shutil
-from tqdm import tqdm
+import warnings
 from pathlib import Path
 import argparse
 
+# Import the new configuration-based system
+from emoji_pack_generator import EmojiPackConfig, EmojiPackProcessor
+
+# Legacy functions for backward compatibility
 def download_repo_zip(repo_url, branch='main'):
-    zip_url = f"https://github.com/{repo_url}/archive/refs/heads/{branch}.zip"
-    response = requests.get(zip_url, stream=True)
-    if response.status_code == 200:
-        total_size = int(response.headers.get('content-length', 0))
-        block_size = 1024  # 1 Kibibyte
-        t = tqdm(total=total_size, unit='iB', unit_scale=True)
-        zip_content = io.BytesIO()
-        for data in response.iter_content(block_size):
-            t.update(len(data))
-            zip_content.write(data)
-        t.close()
-        actual_size = zip_content.tell()
-        if total_size != 0 and actual_size != total_size:
-            print(f"ERROR, something went wrong: expected {total_size} bytes, got {actual_size} bytes")
-        return zip_content.getvalue()
-    else:
-        print(f"Failed to download repository zip from: {zip_url}\nResponse code: {response.status_code}")
-        return None
+    """Legacy function - now uses new configuration system."""
+    warnings.warn("download_repo_zip is deprecated. Use EmojiPackProcessor instead.", 
+                  DeprecationWarning, stacklevel=2)
+    
+    # Create a temporary config for the legacy call
+    temp_config = {
+        "source": {"repository": repo_url, "branch": branch, "folder": "assets"},
+        "input_structure": {},
+        "output": {},
+        "file_processing": {}
+    }
+    config = type('Config', (), temp_config)()
+    processor = EmojiPackProcessor(config)
+    return processor.download_repo_zip(branch)
 
 def extract_folder_from_zip(zip_content, folder_name, extract_to='.'):
+    """Legacy function - now uses new configuration system."""
+    warnings.warn("extract_folder_from_zip is deprecated. Use EmojiPackProcessor instead.", 
+                  DeprecationWarning, stacklevel=2)
+    
+    # Extract using new system - simplified for legacy compatibility
+    import zipfile
+    import io
+    from tqdm import tqdm
+    
     with zipfile.ZipFile(io.BytesIO(zip_content)) as zip_file:
         members = [m for m in zip_file.namelist() if m.startswith(folder_name)]
         for member in tqdm(members, desc="Extracting"):
@@ -40,80 +44,49 @@ def extract_folder_from_zip(zip_content, folder_name, extract_to='.'):
                     target.write(source.read())
 
 def process_metadata_and_images(extract_to, style, skin_tone):
-    providers = []
-    for dir_name in os.listdir(extract_to):
-        subfolder_path = os.path.join(extract_to, dir_name).replace("\\", "/")
-        if os.path.isdir(subfolder_path):
-            metadata_file_path = os.path.join(subfolder_path, 'metadata.json').replace("\\", "/")
-            image_folder_path = None
-
-            if os.path.exists(metadata_file_path):
-                print(f"Found metadata file: {metadata_file_path}")
-
-            if os.path.exists(os.path.join(subfolder_path, style).replace("\\", "/")):
-                image_folder_path = os.path.join(subfolder_path, style).replace("\\", "/")
-                print(f"Found {style} folder in {subfolder_path}")
-            elif os.path.exists(os.path.join(subfolder_path, skin_tone, style).replace("\\", "/")):
-                image_folder_path = os.path.join(subfolder_path, skin_tone, style).replace("\\", "/")
-                print(f"Found {style} folder in {subfolder_path}/{skin_tone}")
-
-            if image_folder_path:
-                png_files = [f for f in os.listdir(image_folder_path) if f.lower().endswith('.png')]
-                if png_files:
-                    png_path = os.path.join(image_folder_path, png_files[0]).replace("\\", "/")
-                    print(f"Found PNG file: {png_path}")
-
-                    if png_path and metadata_file_path:
-                        with open(metadata_file_path, 'r', encoding='utf-8') as metadata_file:
-                            metadata = json.load(metadata_file)
-                            #print(f"Metadata content: {json.dumps(metadata, indent=4)}")
-                            print(f"{metadata['cldr']}: metadata loaded")
-
-                        if metadata:
-                            unicode = metadata["unicode"]
-                            if " " not in unicode:
-                                if unicode == "1f603":
-                                    shutil.copy2(png_path, f'./packs/FluentUi-{style}-{skin_tone}-Emoji/pack.png')
-
-                                print(unicode + metadata["glyph"])
-                            elif unicode.count(" ") == 1 and "fe0f" in unicode:
-                                print("Special case Variation Selector 16 Found")
-                                unicode = unicode.replace(" fe0f", "", 1)
-                                metadata["glyph"] = chr(int(unicode, 16))
-                                print(unicode + metadata["glyph"])
-                            else:
-                                print(f"Skipping {unicode} because it contains a space")
-                                continue
-
-                            destination_image = f'./packs/FluentUi-{style}-{skin_tone}-Emoji/assets/minecraft/textures/font/{unicode}.png'
-                            print(f"Copying {png_path} to {destination_image}")
-                            Path(destination_image).parent.mkdir(exist_ok=True, parents=True)
-                            shutil.copy2(png_path, destination_image)
-
-                            providers.append({
-                                "type": "bitmap",
-                                "file": f"minecraft:font/{unicode}.png",
-                                "height": 7,
-                                "ascent": 7,
-                                "chars": [metadata["glyph"]]
-                            })
-    return providers
+    """Legacy function - now uses new configuration system."""
+    warnings.warn("process_metadata_and_images is deprecated. Use EmojiPackProcessor instead.", 
+                  DeprecationWarning, stacklevel=2)
+    
+    # Use the FluentUI configuration
+    config_path = os.path.join(os.path.dirname(__file__), 'configs', 'fluentui-emoji.json')
+    config = EmojiPackConfig(config_path)
+    processor = EmojiPackProcessor(config)
+    return processor.process_metadata_and_images(extract_to, style, skin_tone)
 
 def save_json(data, file_path):
+    """Legacy function - now uses new configuration system."""
+    warnings.warn("save_json is deprecated. Use EmojiPackProcessor.save_json instead.", 
+                  DeprecationWarning, stacklevel=2)
+    
     file_path.parent.mkdir(exist_ok=True, parents=True)
+    import json
     with open(file_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Download and process FluentUI Emoji')
+    parser = argparse.ArgumentParser(description='Download and process FluentUI Emoji (Legacy - use emoji_pack_generator.py for new features)')
     parser.add_argument('--repo-url', default='microsoft/fluentui-emoji', help='GitHub repository URL')
     parser.add_argument('--folder-name', default='fluentui-emoji-main/assets', help='Folder name in the repository')
     parser.add_argument('--extract-to', default='./cache/fluentui-emoji/assets/', help='Extraction directory')
     parser.add_argument('--skin-tone', default='Default', choices=["Default", "Dark", "Medium-Dark", "Medium-Light", "Light"], help='Skin tone')
     parser.add_argument('--style', default='3D', choices=['3D', 'Color', 'Flat'], help='Emoji style')
     parser.add_argument('--download', action='store_true', help='Force download of assets')
+    parser.add_argument('--config', help='Use JSON configuration file (recommended - uses emoji_pack_generator.py)')
     args = parser.parse_args()
 
+    # If config is specified, use the new system
+    if args.config:
+        print("Using new configuration-based system...")
+        config = EmojiPackConfig(args.config)
+        processor = EmojiPackProcessor(config)
+        processor.generate_pack(args.style, args.skin_tone, args.extract_to, args.download)
+        exit(0)
+
+    # Legacy behavior with deprecation warning
+    print("WARNING: Legacy mode is deprecated. Consider using --config with a JSON configuration file.")
+    print("See configs/fluentui-emoji.json for an example configuration.")
+    
     repo_url = args.repo_url
     folder_name = args.folder_name
     extract_to = args.extract_to
